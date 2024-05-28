@@ -1,0 +1,470 @@
+---
+title: "Whodunnit? Inferring what happened from multimodal evidence"
+author: "Sarah A. Wu&ast;, Erik Brockbank&ast;, Hannah Cha, Jan-Philipp Fränken, Emily Jin, Zhuoyi Huang, Weiyu Liu, Ruohan Zhang, Jiajun Wu, Tobias Gerstenberg"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  bookdown::html_document2:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: cosmo
+    highlight: tango
+---
+
+# Setup
+
+```{r setup, include = F, message = F, warning = F}
+# load relevant libraries and functions
+require(knitr)         # for knitting        
+library(ggstatsplot)   # extension of ggplot2
+library(Metrics)       # for RMSE
+library(DT)            # for datatable() function 
+library(brms)          # for Bayesian regression models
+library(tidybayes)     # for extracting variables from brms
+library(Hmisc)         # for bootstrapped confidence intervals
+library(scales)        # hue palette
+library(showtext)      # for fonts
+library(ggrepel)       # avoid overlap in geom_text
+library(patchwork)     # for multiple plots
+library(png)           # for working with images
+library(grid)          # for grob?
+library(egg)           # for geom_custom
+library(ggtext)        # for styling ggplot text
+library(tidyverse)     # for everything else
+
+knitr::opts_chunk$set(echo = T, warning = F, message = F)
+
+# set default plot theme 
+theme_set(theme_classic() + 
+            theme(text = element_text(size = 14))) 
+
+# suppress warnings about grouping 
+options(dplyr.summarise.inform = F)
+options(xtable.floating = F)
+options(xtable.timestamp = "")
+
+set.seed(1)
+
+data_dir = '../../data/'
+figures_dir = '../../figures/'
+model_dir = '../model_simulation/model_results/'
+```
+
+# Helper functions
+
+## Demographics
+```{r include = F}
+print_demographics = function(data) {
+  data = data %>% distinct(id, proliferate.condition, gender, age, race, ethnicity, time)
+  # n
+  data %>%
+    group_by(proliferate.condition) %>%
+    summarise(n = n()) %>%
+    print()
+  # gender
+  data %>%
+    group_by(gender) %>%
+    summarise(n = n()) %>%
+    print()
+  # age
+  print(sprintf('age: M = %.0f, SD = %.0f',
+                mean(data$age, na.rm = T),
+                sd(data$age, na.rm = T)))
+  # race
+  data %>%
+    group_by(race) %>%
+    summarise(n = n()) %>%
+    print()
+  # ethnicity
+  data %>%
+    group_by(ethnicity) %>%
+    summarise(n = n()) %>%
+    print()
+  # time taken
+  print(sprintf('time: %.1f minutes (SD = %.1f)',
+                mean(data$time, na.rm = T)/60,
+                sd(data$time, na.rm = T)/60))
+}
+```
+
+
+# Data
+
+```{r}
+trial.info = read_csv(paste0(data_dir, 'key.csv'),
+                      show_col_types = F)
+conditions = c('vision' = 'visual',
+               'audio' = 'auditory',
+               'multi' = 'multimodal')
+condition_colors = c('indianred1', 'deepskyblue', 'mediumorchid2')
+```
+
+## Humans
+```{r}
+data.human = read_csv(paste0(data_dir, 'humans/trials.csv'),
+                show_col_types = F) %>%
+  left_join(read_csv(paste0(data_dir, 'humans/participants.csv'),
+                     show_col_types = F) %>%
+              select(-proliferate.condition, -error),
+            by = 'workerid') %>%
+  rename(id = workerid,
+         response = judgment) %>%
+  filter(!(startsWith(trial, 'example')),
+         # exclude for technical difficulties
+         !(id %in% c(3695, 3696, 3697, 3702, 3705, 3708, 3777)),
+         # accidentally recruited 1 too many
+         !(id == 3794),
+         # exclude for audio check
+         nchar(audio_check) <= 2) %>%
+  left_join(trial.info, by = 'trial') %>%
+  mutate(id = factor(id),
+         condition = ifelse(visual_clue & audio_clue, 'multi',
+                            ifelse(visual_clue, 'vision', 'audio')),
+         condition = factor(condition, levels = names(conditions)),
+         accuracy = ifelse(correct == 'A', 100 - response, response),
+         trial = factor(trial, levels = trial.info$trial)) %>%
+    select(-error, -audio_check, -num,
+           -a_type, -b_type, -visual_clue, -audio_clue)
+```
+
+Demographics:
+```{r}
+print_demographics(data.human)
+```
+
+Feedback:
+```{r}
+data.human %>%
+  distinct(id, feedback) %>%
+  datatable(rownames = F)
+```
+
+## GPT-4(V)
+```{r}
+data.gpt = read_csv(paste0(data_dir, 'gpt4v.csv'),
+                      show_col_types = F) %>%
+  mutate(model = 'GPT-4V') %>%
+  rbind(read_csv(paste0(data_dir, 'gpt4.csv'),
+                 show_col_types = F) %>%
+          mutate(model = 'GPT-4')) %>%
+  rename(id = n) %>%
+  mutate(trial = gsub('_', '', trial_id)) %>%
+  left_join(trial.info, by = 'trial') %>%
+  # 0 = definitely A, 100 = definitely B
+  mutate(condition = factor(condition, levels = names(conditions)),
+         accuracy = ifelse(correct == 'A', 100 - response, response),
+         trial = factor(trial, levels = trial.info$trial)) %>%
+  select(-before, -after, -trial_id)
+```
+
+## Simulation model
+```{r}
+data.sim = read_csv(paste0(model_dir, 'results_visual_simulation.csv'),
+                    show_col_types = F) %>%
+  bind_rows(read_csv(paste0(model_dir, 'results_audio_simulation.csv'),
+                     show_col_types = F)) %>%
+  bind_rows(read_csv(paste0(model_dir, 'results_multimodal_simulation.csv'),
+                     show_col_types = F)) %>%
+  left_join(trial.info, by = 'trial') %>%
+  mutate(condition = ifelse(visual & audio, 'multi',
+                            ifelse(visual, 'vision', 'audio')),
+         condition = factor(condition, levels = names(conditions)),
+         accuracy = ifelse(correct == 'A', 100 - judgment, judgment),
+         trial = factor(trial, levels = trial.info$trial))
+```
+
+## Combined
+```{r}
+data.all = data.human %>%
+  select(id, trial, response, correct, condition, accuracy) %>%
+  mutate(model = 'humans') %>%
+  rbind(data.gpt %>%
+          select(-reason, -trial_num)) %>%
+  select(-correct) %>%
+  mutate(model = factor(model, levels = c('humans', 'GPT-4', 'GPT-4V')),
+         modality = ifelse(condition == 'multi', 'multi', 'single'),
+         modality = factor(modality, levels = c('single', 'multi')))
+
+data.means = data.all %>%
+  group_by(model, trial, condition) %>%
+  summarise(mean = mean(accuracy),
+            low = smean.cl.boot(accuracy)[2],
+            high = smean.cl.boot(accuracy)[3]) %>%
+  ungroup() %>%
+  pivot_wider(names_from = model,
+              values_from = c(mean, low, high)) %>%
+  rename_all(~ tolower(str_replace_all(., "-", ""))) %>%
+  left_join(data.sim %>%
+              select(trial, condition, mean_sim = accuracy) %>%
+              mutate(low_sim = mean_sim,
+                     high_sim = mean_sim),
+           by = c('trial', 'condition'))
+```
+
+
+# Analysis
+
+## Accuracy by modality
+
+### Humans
+```{r}
+fit.human = brm(
+  formula = accuracy ~ 1 + modality + (1 | id),
+  data = data.all %>% filter(model == 'humans'),
+  iter = 2000,
+  seed = 1,
+  file = 'cache/fit.human'
+)
+summary(fit.human)
+```
+
+### GPT-4
+```{r}
+# no random intercept since all independent queries
+fit.gpt4 = brm(
+  formula = accuracy ~ 1 + modality,
+  data = data.all %>% filter(model == 'GPT-4'),
+  iter = 2000,
+  seed = 1,
+  file = 'cache/fit.gpt4'
+)
+summary(fit.gpt4)
+```
+
+### GPT-4V
+```{r}
+# no random intercept since all independent queries
+fit.gpt4v = brm(
+  formula = accuracy ~ 1 + modality,
+  data = data.all %>% filter(model == 'GPT-4V'),
+  iter = 2000,
+  seed = 1,
+  file = 'cache/fit.gpt4v'
+)
+summary(fit.gpt4v)
+```
+
+## Modality correlations
+```{r}
+cor.test(data.means %>% filter(condition == 'vision') %>% .$mean_humans,
+         data.means %>% filter(condition == 'multi') %>% .$mean_humans)
+
+cor.test(data.means %>% filter(condition == 'audio') %>% .$mean_humans,
+         data.means %>% filter(condition == 'multi') %>% .$mean_humans)
+
+cor.test(data.means %>% filter(condition == 'audio') %>% .$mean_humans,
+         data.means %>% filter(condition == 'vision') %>% .$mean_humans)
+
+fit.modalities = brm(
+  formula = multi ~ 1 + vision + audio,
+  data = data.means %>%
+    select(trial, condition, mean_humans) %>%
+    pivot_wider(names_from = condition,
+                values_from = mean_humans) %>%
+    mutate(vision = scale(vision),
+           audio = scale(audio)),
+  iter = 2000,
+  seed = 1,
+  file = 'cache/fit.modalities'
+)
+summary(fit.modalities)
+```
+
+```{r}
+get_variables(fit.modalities)
+
+posteriors = fit.modalities %>%
+  gather_draws(b_vision, b_audio) %>%
+  pivot_wider(names_from = .variable,
+              values_from = .value) %>%
+  mutate(diff = b_vision - b_audio)
+
+smean.cl.boot(posteriors$diff)
+```
+
+
+# Plots
+
+## Aggregated
+```{r fig.width = 5, fig.height = 2.5}
+ggplot(data = data.all,
+       mapping = aes(x = model,
+                     y = accuracy,
+                     fill = condition)) +
+  stat_summary(fun = "mean",
+               geom = "bar",
+               color = "black",
+               alpha = 0.8,
+               linewidth = 0.1,
+               position = position_dodge()) +
+  stat_summary(fun.data = mean_cl_boot,
+               geom = "linerange",
+               color = "black",
+               position = position_dodge(width = 0.9)) +
+  geom_point(data = data.means %>%
+               group_by(condition) %>%
+               summarise(accuracy = mean(mean_sim)) %>%
+               mutate(model = 'humans'),
+             aes(group = condition),
+             shape = 21,
+             size = 3,
+             position = position_dodge(width = 0.9),
+             show.legend = F) +
+  geom_hline(yintercept = 50,
+             linetype = 'dashed',
+             linewidth = 0.5) +
+  guides(fill = guide_legend(nrow = 1)) +
+  scale_fill_manual(values = condition_colors,
+                    labels = conditions) +
+  scale_y_continuous(name = 'inference accuracy (%)',
+                     breaks = seq(0, 100, 25),
+                     expand = expansion(mult = 0.01)) +
+  coord_cartesian(clip = "off",
+                  ylim = c(0, 100)) +
+  theme(text = element_text(size = 14),
+        legend.title = element_blank(),
+        legend.position = c(0.5, 1),
+        legend.direction = 'horizontal',
+        legend.text = element_text(
+          size = 12, margin = margin(r = 0.5, unit = 'cm')),
+        axis.title.y = element_text(size = 12),
+        axis.text.x = element_text(size = 12),
+        axis.title.x = element_blank(),
+        axis.line.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        strip.background = element_blank(),
+        panel.grid.major.y = element_line(),
+        plot.margin = unit(c(0.4, 0, 0.1, 0), 'cm'))
+
+# ggsave(paste0(figures_dir, 'aggregate_accuracy.pdf'), width = 5, height = 2.5)
+```
+
+## Select trials
+```{r fig.width = 5, fig.height = 6}
+select_trials = c('snack3', 'snack8', 'tv6', 'snack10')
+
+ggplot(data = data.all %>%
+         filter(trial %in% select_trials),
+       mapping = aes(x = model,
+                     y = accuracy,
+                     fill = condition,
+                     group = condition)) +
+  stat_summary(fun = "mean",
+               geom = "bar",
+               color = "black",
+               alpha = 0.8,
+               linewidth = 0.1,
+               position = position_dodge()) +
+  stat_summary(fun.data = mean_cl_boot,
+               geom = "linerange",
+               color = "black",
+               position = position_dodge(width = 0.9)) +
+  geom_point(size = 1,
+             shape = 21,
+             color = 'gray30',
+             alpha = 0.25,
+             position = position_jitterdodge(jitter.width = 0.2,
+                                             dodge.width = 0.9),
+             show.legend = F) +
+  geom_point(data = data.means %>%
+               filter(trial %in% select_trials) %>%
+               rename(accuracy = mean_sim) %>%
+               mutate(model = 'humans'),
+             aes(group = condition),
+             shape = 21,
+             size = 3,
+             position = position_dodge(width = 0.9),
+             show.legend = F) +
+  geom_hline(yintercept = 50,
+             linetype = 'dashed',
+             linewidth = 0.3) +
+  facet_wrap(~ trial, ncol = 1, scales = 'free') +
+  guides(fill = guide_legend(nrow = 1)) +
+  scale_fill_manual(values = condition_colors,
+                    labels = conditions) +
+  scale_y_continuous(name = 'inference accuracy (%)',
+                     breaks = seq(0, 100, 25),
+                     expand = expansion(mult = 0.01)) +
+  coord_cartesian(clip = "off",
+                  ylim = c(0, 110)) +
+  theme(text = element_text(size = 14),
+        legend.title = element_blank(),
+        legend.position = 'bottom',
+        legend.direction = 'horizontal',
+        legend.text = element_text(
+          margin = margin(r = 0.5, unit = 'cm')),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.line.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        strip.background = element_blank(),
+        strip.text.x = element_blank(),
+        panel.grid.major.y = element_line())
+
+# ggsave(paste0(figures_dir, 'accuracy_select_trials.png'), width = 5, height = 6, antialias = 'none')
+```
+
+
+## Scatterplots
+
+### Individual
+```{r}
+scatter_accuracy = function(data, model, title) {
+  r = cor(data$mean_humans, data[[paste0("mean_", model)]]) %>% round(2)
+  print(cor.test(data$mean_humans, data[[paste0("mean_", model)]]))
+  rmse = rmse(data$mean_humans, data[[paste0("mean_", model)]]) %>% round(2)
+  
+  g = ggplot(data = data.means,
+         aes(x = get(paste0("mean_", model)),
+             y = mean_humans,
+             fill = condition)) +
+    geom_abline(intercept = 0, slope = 1,
+                linetype = 2, linewidth = 0.5) +
+    # error bars
+    geom_linerange(size = 0.5, 
+                   mapping = aes(ymin = low_humans,
+                                 ymax = high_humans),
+                   color = 'gray50',
+                   alpha = 0.25) +
+    geom_errorbarh(mapping = aes(xmin = get(paste0("low_", model)),
+                                 xmax = get(paste0("high_", model))),
+                   color = 'gray50',
+                   alpha = 0.25,
+                   height = 0) +
+    # means
+    geom_point(shape = 21,
+               size = 2) +
+    geom_text(label = sprintf('RMSE = %.2f\nr = %s', rmse, r),
+              hjust = 0,   # left align
+              x = 0, y = 110,
+              size = 4, check_overlap = T) +
+    scale_fill_manual(values = condition_colors,
+                      labels = conditions) +
+    scale_x_continuous(name = title,
+                       limits = c(0, 100)) +
+    scale_y_continuous(name = 'humans',
+                       limits = c(0, 110),
+                       breaks = seq(0, 100, 25)) +
+    coord_cartesian(clip = 'off') +
+    theme(legend.position = 'none',
+          legend.title = element_blank(),
+          axis.title.x = element_text(size = 12),
+          axis.title.y = element_text(size = 12))
+}
+```
+
+```{r}
+scatter.gpt4 = scatter_accuracy(data.means, 'gpt4', 'GPT-4')
+scatter.gpt4v = scatter_accuracy(data.means, 'gpt4v', 'GPT-4V')
+scatter.sim = scatter_accuracy(data.means, 'sim', 'simulation model')
+```
+### Combined
+```{r fig.width = 10, fig.height = 3}
+scatter.gpt4 + scatter.gpt4v +
+    scatter.sim + theme(legend.position = c(0.95, 0.25)) +
+  plot_annotation(tag_levels = 'A') &
+  theme(plot.margin = unit(c(0, 0.6, 0, 0), 'cm'))
+
+# ggsave(paste0(figures_dir, 'scatter.pdf'), width = 10, height = 3)
+```
+

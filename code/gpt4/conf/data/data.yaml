@@ -1,0 +1,4 @@
+dir: ../model_data/
+images: trial_images
+scene_graphs: trial_jsons
+audios: audios

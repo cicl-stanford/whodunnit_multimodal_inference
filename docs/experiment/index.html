@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title> Psychology Experiment </title>
+    <link rel="icon" type="image/x-icon" href="favicon.png">
+    <link rel="stylesheet" href='css/jspsych.css' />
+    <link rel="stylesheet" href='css/jquery-ui-edit.css' />
+    <link rel="stylesheet" href='css/jquery-ui-slider-pips-edit.css' />
+    <link rel="stylesheet" href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css' />
+    <link rel="stylesheet" href='css/utils.css' />
+
+    <script src='js/jspsych.js'></script>
+    <script src='js/jquery.min.js'></script>
+    <script src='js/jquery-ui.min.js'></script>
+    <script src='js/jquery-ui-slider-pips.js'></script>
+    <script src='js/timeme.min.js'></script>
+    <script src='https://proliferate.alps.science/static/js/proliferate.js'></script>
+    <script src='js/trial_info.js'></script>
+    <script src='js/plugin-html-button-response.js'></script>
+    <script src='js/plugin-survey-html-form.js'></script>
+    <script src='js/plugin-survey-multi-choice.js'></script>
+    <script src='js/plugin-preload.js'></script>
+    <script src='js/plugin-audio-check.js'></script>
+    <script src='js/plugin-marple-instructions.js'></script>
+    <script src='js/plugin-marple-before.js'></script>
+    <script src='js/plugin-marple-after.js'></script>
+    <script src='js/consent.js'></script>
+    <script src='js/demographic_form.js'></script>
+    <script src='js/utils.js'></script>
+    <script src='instructions/text.js'></script>
+</head>
+
+</body></body>
+
+<script>
+
+    let condition = get_url_param('condition', 1);
+    console.log(condition);
+    let trial_info = null;
+
+    if (condition == 1) {
+        trial_info = trial_info1;
+    } else if (condition == 2) {
+        trial_info = trial_info2;
+    } else if (condition == 3) {
+        trial_info = trial_info3;
+    }
+
+    TimeMe.initialize({
+        currentPageName: 'page',
+        idleTimeoutInSeconds: 30
+    });
+
+    // -----------------------------------------------------
+    // initialize jspsych
+    // -----------------------------------------------------
+    var jsPsych = initJsPsych({
+        show_progress_bar: true,
+        auto_update_progress_bar: false,
+        on_finish: () => {
+            time = TimeMe.getTimeOnPageInSeconds('page');
+
+            let data = jsPsych.data.get();
+
+            let trials_data = data.filter({trial_type: 'marple-after'}).trials;
+            let trials = [];
+            for (var i = 0; i < trials_data.length; i++) {
+                let trial = trials_data[i];
+                trials.push({
+                    'num': i + 1,
+                    'trial': trial['trial'],
+                    'a_type': trial['a_type'],
+                    'b_type': trial['b_type'],
+                    'visual_clue': trial['visual_clue'],
+                    'audio_clue': trial['audio_clue'],
+                    'judgment': trial['response']
+                });
+            }
+
+            let audio_check = data.filter({trial_type: 'audio-check'}).trials[0].response;
+            let participant = data.filter({trial_type: 'survey-html-form'}).trials[0].response;
+            participant.audio_check = audio_check;
+            participant.time = time;
+            console.log(participant);
+
+            proliferate.submit({
+                "trials": trials,
+                "participants": [participant],
+            });
+
+            $('#jspsych-content').css('margin-top', 'auto');
+            $('#jspsych-content').html('<div style="margin: auto;"> <p>' +
+                ' Thank you for participating in this experiment! </p>' +
+                '<p> Redirecting you back to Prolific... </p>');
+            setTimeout(function(){}, 200);
+        }
+    });
+
+    // -----------------------------------------------------
+    // consent, instructions, and comprehension check
+    // -----------------------------------------------------
+
+    let preload_trial = {
+        type: jsPsychPreload,
+        images: preload_images.concat(trial_images),
+        audios: preload_audios.concat(trial_audios)
+    };
+
+    let audio_check_trial = {
+        type: audioCheck,
+        stimulus: 'instructions/audio-check.wav'
+    };
+
+    let instructions = {
+        type: marpleInstructions,
+        pages: instruction_pages,
+        audios: instruction_audios,
+        show_clickable_nav: true,
+        on_start: function() { jsPsych.setProgressBar(0.02); },
+        on_finish: function() { jsPsych.setProgressBar(0.08); }
+    };
+
+    let example_trials = {
+        timeline_variables: example_trial_info,
+        timeline: [
+            {
+                type: marpleBefore,
+                extra_text: jsPsych.timelineVariable('extra_text1')
+            },
+            {
+                type: marpleAfter,
+                extra_text: jsPsych.timelineVariable('extra_text2')
+            }
+        ],
+        trial: jsPsych.timelineVariable('trial'),
+        title: jsPsych.timelineVariable('title'),
+        mission: jsPsych.timelineVariable('mission'),
+        a_type: jsPsych.timelineVariable('a_type'),
+        b_type: jsPsych.timelineVariable('b_type'),
+        visual_clue: jsPsych.timelineVariable('visual_clue'),
+        audio_clue: jsPsych.timelineVariable('audio_clue'),
+        randomize_order: false,
+        on_finish: function() {
+            var prog = jsPsych.getProgressBarCompleted();
+            jsPsych.setProgressBar(prog + 0.02);
+        }
+    }
+
+    let instructions_last = {
+        type: jsPsychHtmlButtonResponse,
+        stimulus: instructions_last_page,
+        choices: ['Continue'],
+        is_narrow: true,
+        on_finish: function() { jsPsych.setProgressBar(0.16); }
+    }
+
+    let comprehension_qs = {
+        type: jsPsychSurveyMultiChoice,
+        questions: [
+            {
+                prompt: comprehension1,
+                options: options1,
+                horizontal: true,
+                required: true
+            },
+            {
+                prompt: comprehension2,
+                options: options2,
+                horizontal: true,
+                required: true
+            },
+            {
+                prompt: comprehension3,
+                options: options3,
+                horizontal: true,
+                required: true
+            }
+        ],
+        preamble: 'Please answer a few questions so we know that you understand the instructions.',
+        on_finish: function(data){
+
+            data.correct = (data.response.Q0 == 'True'
+                && data.response.Q1 == 'True'
+                && data.response.Q2 == 'False');
+        }
+    }
+
+    let fail_comprehension = {
+        timeline: [{
+            type: jsPsychHtmlButtonResponse,
+            stimulus: '<p>Unfortunately, you missed some of the comprehension questions.</p> \
+                        <p>Please review the instructions again.</p>',
+            choices: ['Review'],
+        }],
+        conditional_function: function(){
+            var data = jsPsych.data.get().last(1).trials[0];
+            return !(data.correct);
+        }
+    }
+
+    let loop_node = {
+        timeline: [
+            instructions,
+            example_trials,
+            instructions_last,
+            comprehension_qs,
+            fail_comprehension
+        ],
+        loop_function: function(data){
+            var data = jsPsych.data.get().last(1).values()[0];
+            return !(data.correct);
+        }
+    }
+
+    let trials_start = {
+        type: jsPsychHtmlButtonResponse,
+        stimulus: start_prompt,
+        choices: ['Start'],
+        is_narrow: true,
+        on_finish: function() { jsPsych.setProgressBar(0.2); },
+    };
+
+
+    // -----------------------------------------------------
+    // experiment trials
+    // -----------------------------------------------------
+
+    const num_trials = trial_info.length;
+    const trial_order = generate_trial_order(num_trials);
+    // console.log(trial_order);
+
+    let trials = {
+        timeline_variables: trial_info,
+        timeline: [
+            {
+                type: marpleBefore,
+            },
+            {
+                type: marpleAfter,
+            }
+        ],
+        trial: jsPsych.timelineVariable('trial'),
+        title: function() {
+            var html = 'Case ' + (trial_order.indexOf(jsPsych.timelineVariable('num') - 1) + 1);
+            html += ' of ' + num_trials;
+            return html;
+        },
+        mission: jsPsych.timelineVariable('mission'),
+        a_type: jsPsych.timelineVariable('a_type'),
+        b_type: jsPsych.timelineVariable('b_type'),
+        visual_clue: jsPsych.timelineVariable('visual_clue'),
+        audio_clue: jsPsych.timelineVariable('audio_clue'),
+        sample: {
+            type: 'custom',
+            fn: function(t) {
+                return trial_order;
+            },
+        },
+        on_finish: function() {
+            var prog = jsPsych.getProgressBarCompleted();
+            jsPsych.setProgressBar(prog + 0.02);
+        }
+    };
+
+    // -----------------------------------------------------
+    // compile timeline
+    // -----------------------------------------------------
+    let timeline = [];
+    timeline.push(preload_trial);
+    timeline.push(consent);
+    timeline.push(audio_check_trial);
+    timeline.push(loop_node);
+    timeline.push(trials_start);
+    // timeline.push(example_trials); // only for debugging
+    timeline.push(trials);
+    timeline.push(demographic_form);
+
+    // -----------------------------------------------------
+    // run timeline
+    // -----------------------------------------------------
+    jsPsych.run(timeline);
+
+
+</script>
+
+</html>

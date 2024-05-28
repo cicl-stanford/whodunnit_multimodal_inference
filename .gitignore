@@ -1,0 +1,29 @@
+.DS_Store
+*.DS_Store
+*.pyc
+*.pptx
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# satisfy github size req 
+find . -size +100M | cat >> .gitignore
+
+# ignore all __pycache__ folders
+__pycache__/
+
+# ignore modern_interiors assets
+MODERN_INTERIORS/
+
+# node modules
+node_modules/
+
+# R / RStudio files
+.Rhistory
+.Rapp.history
+.Rproj.user
+*.RData
+*.Ruserdata
+*.Renviron
+/*.Rcheck/

@@ -1,0 +1,248 @@
+{
+    "Grid": {
+        "auto": {
+            "max_num_agent": 2,
+            "room_split_dirs": [
+                "vert",
+                "horz"
+            ],
+            "min_room_dim": 5,
+            "max_num_room": 3
+        },
+        "width": 15,
+        "height": 15,
+        "wall_type": 2,
+        "floor_type": 1,
+        "agents": {
+            "num": 2,
+            "initial": [
+                {
+                    "name": "B",
+                    "id": 1,
+                    "pos": [
+                        2,
+                        10
+                    ],
+                    "dir": 1,
+                    "color": "red",
+                    "step_size": 1,
+                    "forgetness": 0,
+                    "mission_preference_initial": {
+                        "get_night_snack": 0,
+                        "get_snack": 1,
+                        "feed_dog": 0,
+                        "watch_news_on_tv": 0,
+                        "move_plant_at_night": 0,
+                        "take_shower": 0,
+                        "do_laundry": 0,
+                        "watch_movie_cozily": 0,
+                        "change_outfit": 0,
+                        "clean_living_room_table": 0
+                    },
+                    "cur_mission": "get_snack",
+                    "cur_subgoal": null,
+                    "carrying": {
+                        "num": 0,
+                        "initial": []
+                    }
+                },
+                {
+                    "name": "F",
+                    "id": 2,
+                    "pos": [
+                        11,
+                        10
+                    ],
+                    "dir": 1,
+                    "color": "blue",
+                    "step_size": 1,
+                    "forgetness": 0,
+                    "mission_preference_initial": {
+                        "get_night_snack": 0,
+                        "get_snack": 1,
+                        "feed_dog": 0,
+                        "watch_news_on_tv": 0,
+                        "move_plant_at_night": 0,
+                        "take_shower": 0,
+                        "do_laundry": 0,
+                        "watch_movie_cozily": 0,
+                        "change_outfit": 0,
+                        "clean_living_room_table": 0
+                    },
+                    "cur_mission": "get_snack",
+                    "cur_subgoal": null,
+                    "carrying": {
+                        "num": 0,
+                        "initial": []
+                    }
+                }
+            ]
+        },
+        "rooms": {
+            "num": 3,
+            "initial": [
+                {
+                    "type": "Kitchen",
+                    "top": [
+                        1,
+                        1
+                    ],
+                    "size": [
+                        13,
+                        6
+                    ],
+                    "furnitures": {
+                        "num": 3,
+                        "initial": [
+                            {
+                                "type": "table",
+                                "pos": [
+                                    11,
+                                    1
+                                ],
+                                "state": null,
+                                "objs": {
+                                    "num": 0,
+                                    "initial": []
+                                }
+                            },
+                            {
+                                "type": "electric_refrigerator",
+                                "pos": [
+                                    6,
+                                    1
+                                ],
+                                "state": {
+                                    "openable": true
+                                },
+                                "objs": {
+                                    "num": 1,
+                                    "initial": []
+                                }
+                            },
+                            {
+                                "type": "light",
+                                "pos": [
+                                    1,
+                                    2
+                                ],
+                                "state": {
+                                    "toggleable": 0
+                                },
+                                "objs": {
+                                    "num": 0,
+                                    "initial": []
+                                }
+                            }
+                        ]
+                    }
+                },
+                {
+                    "type": "LivingRoom",
+                    "top": [
+                        1,
+                        8
+                    ],
+                    "size": [
+                        7,
+                        6
+                    ],
+                    "furnitures": {
+                        "num": 2,
+                        "initial": [
+                            {
+                                "type": "sofa",
+                                "pos": [
+                                    4,
+                                    9
+                                ],
+                                "state": null,
+                                "objs": {
+                                    "num": 0,
+                                    "initial": []
+                                }
+                            },
+                            {
+                                "type": "table",
+                                "pos": [
+                                    4,
+                                    11
+                                ],
+                                "state": null,
+                                "objs": {
+                                    "num": 0,
+                                    "initial": []
+                                }
+                            }
+                        ]
+                    }
+                },
+                {
+                    "type": "Bedroom",
+                    "top": [
+                        9,
+                        8
+                    ],
+                    "size": [
+                        5,
+                        6
+                    ],
+                    "furnitures": {
+                        "num": 2,
+                        "initial": [
+                            {
+                                "type": "bed",
+                                "pos": [
+                                    9,
+                                    12
+                                ],
+                                "state": null,
+                                "objs": {
+                                    "num": 0,
+                                    "initial": []
+                                }
+                            },
+                            {
+                                "type": "light",
+                                "pos": [
+                                    13,
+                                    10
+                                ],
+                                "state": {
+                                    "toggleable": 0
+                                },
+                                "objs": {
+                                    "num": 0,
+                                    "initial": []
+                                }
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        "doors": {
+            "num": 2,
+            "initial": [
+                {
+                    "type": "door",
+                    "dir": "horz",
+                    "pos": [
+                        2,
+                        7
+                    ],
+                    "state": "closed"
+                },
+                {
+                    "type": "door",
+                    "dir": "horz",
+                    "pos": [
+                        11,
+                        7
+                    ],
+                    "state": "open"
+                }
+            ]
+        }
+    }
+}

@@ -1,0 +1,36 @@
+.marple-scene {
+    width: 30%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding-top: 1px;
+}
+
+.marple-clue {
+    width: 200px;
+    height: 200px;
+    line-height: 200px;
+    align-items: center;
+    margin: auto;
+    border: 2px solid black;
+    border-radius: 0;
+    font-size: 3rem;
+
+}
+
+#audio-btn {
+    background-color: #f5ece1;
+    border: 2px solid black;
+}
+
+#audio-btn:hover {
+    background-color: #e0d1bf;
+    border: 2px solid black;
+}
+
+#audio-btn:disabled {
+    background-color: #eee;
+    color: #aaa;
+    cursor: not-allowed;
+    border: 2px solid black;
+}
