@@ -93,7 +93,9 @@ and [running simulation model predictions](code/README.md#simulation-model).
 - **Erik Brockbank\***: Conceptualization, Methodology, Software, Validation, Formal analysis, Resources, Writing - Original Draft, Writing - Review &amp; Editing, Project administration
 - **Hannah Cha**: Conceptualization, Methodology, Software, Writing - Review &amp; Editing, Visualization
 - **Philipp Jan-Fränken**: Conceptualization, Methodology, Software, Validation, Resources
-- **Zhuoyi Huang**: Conceptualization, Methodology, Software, Data Curation
+- **Philipp Jan-Fränken**: Conceptualization, Methodology, Software, Validation, Resources
+- **Emily Jin**: Conceptualization, Methodology
+- **Weiyu Liu**: Conceptualization, Methodology
 - **Ruohan Zhang**: Conceptualization, Methodology, Validation, Supervision
-- **Jiajun Wu**: Funding acquisition
+- **Jiajun Wu**: Conceptualization, Supervision, Funding acquisition
 - **Tobias Gerstenberg**: Conceptualization, Methodology, Writing - Review &amp; Editing, Supervision, Project administration, Funding acquisition
