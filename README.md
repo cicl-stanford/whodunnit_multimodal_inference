@@ -1,6 +1,6 @@
 # Whodunnit? Inferring what happened from multimodal evidence
 
-Materials for the paper "[Whodunnit? Inferring what happened from multimodal evidence](https://github.com/cicl-stanford/whodunnit_multimodal_inference/blob/main/writeup/whodunnit_0510.pdf)".
+Materials for the paper "[Whodunnit? Inferring what happened from multimodal evidence](https://cicl.stanford.edu/papers/wu2024whodunnit.pdf)".
 
 Sarah A. Wu*, Erik Brockbank*, Hannah Cha, Jan-Philipp Fr&auml;nken, Emily Jin, Zhuoyi Huang, Weiyu Liu, Ruohan Zhang, Jiajun Wu, Tobias Gerstenberg.
 
